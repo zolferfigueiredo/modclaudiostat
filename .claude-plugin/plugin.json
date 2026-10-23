@@ -1,0 +1,6 @@
+{
+  "name": "claudiostat-rings",
+  "version": "0.1.0",
+  "description": "ClaudioStat-style session and week rings in a panel that stays open beside the chat",
+  "types": "./types/index.d.ts"
+}
