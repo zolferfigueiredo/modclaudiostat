@@ -33,6 +33,12 @@ export const register: Register = on => {
     return started
   })
 
+  on('ui.message', async ($, e, next) => {
+    if (e.element === 'gear') await update($, isSettingsOpen, open => !open)
+
+    return next(e)
+  })
+
   // The desktop app draws a mod only in a pane or this band above the prompt, not in the hint line under it.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const r = await read($, reading)
@@ -64,9 +70,7 @@ export const register: Register = on => {
               </Box>
             ))}
           </Box>
-          <Button key="settings" label="Settings" onPress={() => update($, isSettingsOpen, open => !open)}>
-            <Text size="title">⚙</Text>
-          </Button>
+          {'Client' in ui && <ui.Client key="gear" module="./gear.tsx" />}
         </Box>
         {(await read($, isSettingsOpen)) && (
           <Box flexDirection="row" alignItems="center" gap="sm">

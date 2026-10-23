@@ -51,7 +51,8 @@ test('the strip shows S, W, F, pace and budget from the account', async ($, on) 
   expect(await value(/^10%\/h$/)).toBeDefined()
   expect(await value(/^3\.1%\/h$/)).toBeDefined()
 
-  await ui.press({ key: 'settings' })
+  expect((await ui.find({ type: 'Text', in: 'gear' }))?.props.size).toBe('title')
+  await ui.pointer({ type: 'down', x: 0, y: 0, button: 'left', in: 'gear' })
   await ui.press({ key: 'day' })
   // Per day: 80%/day over 8 working hours, against 81% left over 4 days.
   expect(await value(/^80%\/day$/)).toBeDefined()
