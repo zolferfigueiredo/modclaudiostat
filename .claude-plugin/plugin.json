@@ -1,6 +1,6 @@
 {
   "name": "claudiostat-rings",
-  "version": "0.1.0",
-  "description": "ClaudioStat-style session and week rings in a panel that stays open beside the chat",
+  "version": "0.2.0",
+  "description": "ClaudioStat's session, week and Fable limits with pace and budget, in a thin row above the prompt",
   "types": "./types/index.d.ts"
 }

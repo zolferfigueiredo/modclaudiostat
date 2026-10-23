@@ -1,44 +1,64 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-import { timeLeft } from './register'
+import { budget, snapshot, speed, timeLeft } from './register'
 
-const NOW = Date.parse('2026-10-23T12:00:00Z')
+const NOW = Date.parse('2026-10-24T12:00:00Z')
+const HOUR = 3_600_000
 
-const PANE = {
+const reply = (s: number, w: number) => ({
+  five_hour: { utilization: s, resets_at: '2026-10-24T14:00:00+00:00' },
+  seven_day: { utilization: w, resets_at: '2026-10-27T18:00:00+00:00' },
+  limits: [
+    {
+      kind: 'weekly_scoped',
+      percent: 10,
+      resets_at: '2026-10-27T18:00:00+00:00',
+      scope: { model: { display_name: 'Fable' } },
+    },
+  ],
+})
+
+const BAND = {
   plugin: 'claudiostat-rings',
-  component: 'Pane',
-  requestId: 'claudiostat-rings',
+  component: 'AbovePrompt',
   props: {
-    title: 'ClaudioStat',
-    isFocused: false,
-    bodyColumns: 40,
-    placement: 'dock',
-    scroll: { offset: 0, bodyRows: 20 },
+    hasSurvey: false,
+    isWorking: false,
+    maxRows: 10,
+    bodyColumns: 80,
+    scroll: { offset: 0, bodyRows: 10 },
     view: {},
   },
 } as const
 
-test('the panel shows session and week with their resets', async ($, on) => {
-  mock.clock(on, { now: NOW })
-  on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('session.measure', (_, e) => ({ changed: e.changed }))
+test('the strip shows S, W, F, pace and budget from the account', async ($, on) => {
+  const clock = mock.clock(on, { now: NOW })
+  // An hour ago W was 10 points lower and S 40 lower: both well past what lasts until their resets.
+  mock.store(on, { samples: [snapshot(reply(20, 9), NOW - HOUR)] })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.authorize', () => ({ value: { handle: 'h', kind: 'bearer' } }))
+  on('http.fetch', () => ({ value: { status: 200, ok: true, headers: {}, text: JSON.stringify(reply(60, 19)) } }))
 
-  await $.session.measure({
-    context: { window: 200_000 },
-    rateLimits: [
-      { kind: 'five_hour', percentUsed: 42, resetsAt: '2026-10-23T14:10:00Z' },
-      { kind: 'seven_day', percentUsed: 18.5, resetsAt: '2026-10-26T16:00:00Z' },
-    ],
-    changed: ['rateLimits'],
-  })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await clock.settle()
 
-  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  const svg = await ui.find({ type: 'Svg' })
-  expect(svg?.props.alt).toBe('Session 42%, Week 19%')
-  expect(svg?.props.source).toContain('stroke-dasharray="42 100"')
-  expect((await ui.find({ type: 'Text', text: /2h 10m/ }))?.text).toBe('resets in 2h 10m')
-  expect((await ui.find({ type: 'Text', text: /3d 4h/ }))?.text).toBe('resets in 3d 4h')
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const value = async (text: RegExp) => ui.find({ type: 'Text', text })
+  expect((await value(/^60%$/))?.props.color).toBe('#cd3e48')
+  expect((await value(/^19%$/))?.props.color).toBe('#cd3e48')
+  expect(await value(/^10%$/)).toBeDefined()
+  // Per working hour by default: W rose 10 points in an hour, against 81% left over 26 working hours.
+  expect(await value(/^10%\/h$/)).toBeDefined()
+  expect(await value(/^3\.1%\/h$/)).toBeDefined()
+
+  await ui.press({ key: 'settings' })
+  await ui.press({ key: 'day' })
+  // Per day: 80%/day over 8 working hours, against 81% left over 4 days.
+  expect(await value(/^80%\/day$/)).toBeDefined()
+  expect(await value(/^20%\/day$/)).toBeDefined()
   await ui.unmount()
 
+  expect(budget({ pct: 100, reset: NOW + HOUR }, { unit: 'hour', workHours: 8 }, NOW)).toBe(0)
+  expect(speed([], 'w', 7 * 24 * HOUR, HOUR)).toBe(null)
   expect(timeLeft(45 * 60_000)).toBe('45m')
 })
