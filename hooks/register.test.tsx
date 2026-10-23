@@ -33,7 +33,7 @@ const BAND = {
 
 test('the strip shows S, W, F, pace and budget from the account', async ($, on) => {
   const clock = mock.clock(on, { now: NOW })
-  // An hour ago W was 10 points lower and S 40 lower: S needs 20%/h to last its 2 h, W 20%/day for 4 days.
+  // An hour ago W was 10 points lower and S 40 lower: both well past what lasts until their resets.
   mock.store(on, { samples: [snapshot(reply(20, 9), NOW - HOUR)] })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('session.authorize', () => ({ value: { handle: 'h', kind: 'bearer' } }))
@@ -43,16 +43,22 @@ test('the strip shows S, W, F, pace and budget from the account', async ($, on) 
   await clock.settle()
 
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  expect((await ui.find({ type: 'Text', text: /^S / }))?.props.color).toBe('#cd3e48')
-  expect((await ui.find({ type: 'Text', text: /^W / }))?.text).toBe('W 19%')
-  expect((await ui.find({ type: 'Text', text: /^F / }))?.text).toBe('F 10%')
-  // W rose 10 points in an hour: 80%/day over 8 working hours, against 81% left over 4 days.
-  expect((await ui.find({ type: 'Text', text: /^P / }))?.text).toBe('P 80%/day')
-  expect((await ui.find({ type: 'Text', text: /^B / }))?.text).toBe('B 20%/day')
-  expect((await ui.find({ type: 'Text', text: /^W / }))?.props.color).toBe('#cd3e48')
+  const value = async (text: RegExp) => ui.find({ type: 'Text', text })
+  expect((await value(/^60%$/))?.props.color).toBe('#cd3e48')
+  expect((await value(/^19%$/))?.props.color).toBe('#cd3e48')
+  expect(await value(/^10%$/)).toBeDefined()
+  // Per working hour by default: W rose 10 points in an hour, against 81% left over 26 working hours.
+  expect(await value(/^10%\/h$/)).toBeDefined()
+  expect(await value(/^3\.1%\/h$/)).toBeDefined()
+
+  await ui.press({ key: 'settings' })
+  await ui.press({ key: 'day' })
+  // Per day: 80%/day over 8 working hours, against 81% left over 4 days.
+  expect(await value(/^80%\/day$/)).toBeDefined()
+  expect(await value(/^20%\/day$/)).toBeDefined()
   await ui.unmount()
 
-  expect(budget({ pct: 100, reset: NOW + HOUR }, NOW)).toBe(0)
+  expect(budget({ pct: 100, reset: NOW + HOUR }, { unit: 'hour', workHours: 8 }, NOW)).toBe(0)
   expect(speed([], 'w', 7 * 24 * HOUR, HOUR)).toBe(null)
   expect(timeLeft(45 * 60_000)).toBe('45m')
 })

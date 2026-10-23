@@ -1,9 +1,11 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Limit, Reading, Snap } from '../types'
+import type { Limit, Reading, RingSettings, Snap } from '../types'
 
 const reading = atom({ plugin: 'claudiostat-rings', key: 'reading' } as const, null as Reading | null)
+const settings = atom({ plugin: 'claudiostat-rings', key: 'settings' } as const, { unit: 'hour', workHours: 8 } as RingSettings)
+const isSettingsOpen = atom({ plugin: 'claudiostat-rings', key: 'isSettingsOpen' } as const, false)
 
 const USAGE = 'https://api.anthropic.com/api/oauth/usage'
 const MINUTE = 60_000
@@ -13,7 +15,6 @@ const EVERY = 3 * MINUTE
 // ponytail: six hours of samples is plenty for the 30 min and 1 h speeds; after a longer idle stretch the first
 // readings have no base and pace stays blank for ten minutes.
 const KEEP = 6 * HOUR
-const WORK_HOURS = 8
 
 // ClaudioStat's website colors, as its widgets wear them.
 const PEACH = '#ffb266'
@@ -36,28 +37,68 @@ export const register: Register = on => {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const r = await read($, reading)
     if (!r || e.props.hasSurvey) return next(e)
-    const v = view(r, await $.clock.now())
+    const s = await read($, settings)
+    const v = view(r, s, await $.clock.now())
     const ui = $.ui.resolve(e)
-    const { Box, Text } = ui
+    const { Box, Button, Text } = ui
 
     return (
-      <Box flexDirection="row" alignItems="center" gap="sm">
-        {'Svg' in ui && (
-          <ui.Svg source={rings(v)} alt={v.items.map(item => item.text).join(', ')} width={18} height={18} isInteractive />
+      <Box flexDirection="column" gap="xs">
+        <Box flexDirection="row" alignItems="center" gap="sm">
+          {'Svg' in ui && (
+            <ui.Svg
+              source={rings(v)}
+              alt={v.items.map(item => `${item.letter} ${item.value}`).join(', ')}
+              width={18}
+              height={18}
+              isInteractive
+            />
+          )}
+          {v.items.map(item => (
+            <Box flexDirection="row" gap="xs">
+              <Text dimColor>{item.letter}</Text>
+              <Text color={v.isStale ? undefined : item.color} dimColor={v.isStale} weight="semibold" tabular>
+                {item.value}
+              </Text>
+            </Box>
+          ))}
+          <Button key="settings" label="⚙" plain onPress={() => update($, isSettingsOpen, open => !open)} />
+        </Box>
+        {(await read($, isSettingsOpen)) && (
+          <Box flexDirection="row" alignItems="center" gap="sm">
+            <Text dimColor>Pace and budget</Text>
+            {(['hour', 'day'] as const).map(unit => (
+              <Button
+                key={unit}
+                label={unit === 'hour' ? 'Per hour' : 'Per day'}
+                variant={s.unit === unit ? 'primary' : 'secondary'}
+                onPress={() => change($, old => ({ ...old, unit }))}
+              />
+            ))}
+            <Text dimColor>Working hours</Text>
+            <Button key="fewer" label="-" onPress={() => change($, old => ({ ...old, workHours: Math.max(1, old.workHours - 1) }))} />
+            <Text tabular>{s.workHours}</Text>
+            <Button key="more" label="+" onPress={() => change($, old => ({ ...old, workHours: Math.min(24, old.workHours + 1) }))} />
+            <Button key="done" label="Done" onPress={() => update($, isSettingsOpen, () => false)} />
+          </Box>
         )}
-        {v.items.map(item => (
-          <Text color={v.isStale ? undefined : item.color} dimColor={v.isStale || !item.color} tabular>
-            {item.text}
-          </Text>
-        ))}
       </Box>
     )
   })
 }
 
+// RingSettings are kept in the store, so every session and the next one use the same.
+async function change($: EngineInterface, fn: (old: RingSettings) => RingSettings): Promise<void> {
+  const next = fn(await read($, settings))
+  await update($, settings, () => next)
+  await $.store.set('settings', next)
+}
+
 // Several sessions share one reading through the store: whichever timer fires first fetches, the rest reuse it.
 // ponytail: two sessions writing the samples at once can drop one sample; harmless for a 3 min series.
 async function refresh($: EngineInterface): Promise<void> {
+  const saved = (await $.store.get('settings')) as RingSettings | undefined
+  if (saved) await update($, settings, () => saved)
   const now = await $.clock.now()
   let samples = ((await $.store.get('samples')) as Snap[] | undefined) ?? []
   if (now - (samples.at(-1)?.at ?? 0) >= EVERY - 30_000) {
@@ -134,15 +175,19 @@ export function speed(samples: Snap[], key: 's' | 'w', length: number, window: n
 // resets_at drifts by fractions of a second between replies; real windows are hours apart.
 const sameWindow = (a: Limit | undefined, b: Limit) => a?.reset != null && b.reset !== null && Math.abs(a.reset - b.reset) < HOUR
 
-/** B: what's left of the week over the whole days until the reset, rounded down. */
-export function budget(week: Limit, now: number): number | null {
+/** B: what's left of the week over the whole days (or working hours) until the reset, rounded down. */
+export function budget(week: Limit, s: RingSettings, now: number): number | null {
   const remaining = Math.max(0, 100 - week.pct)
   if (remaining === 0) return 0
   if (week.reset === null) return null
+  const isHour = s.unit === 'hour'
+  const left = (week.reset - now) * (isHour ? s.workHours / 24 : 1)
   // The epsilon keeps float noise (3.000000001) from rounding up to the next day.
-  const days = Math.ceil((week.reset - now) / DAY - 1e-9)
+  const units = Math.ceil(left / (isHour ? HOUR : DAY) - 1e-9)
+  if (units <= 0) return remaining
+  const steps = isHour ? 10 : 1
 
-  return days <= 0 ? remaining : Math.floor(remaining / days)
+  return Math.floor((remaining * steps) / units) / steps
 }
 
 /** S against an even spread of what's left until its reset: orange once faster, red 5 points per hour past it. */
@@ -159,25 +204,27 @@ const overBudget = (p: number | null, b: number | null): Pace =>
 
 const PACE_COLOR: Record<Pace, string | undefined> = { ok: undefined, fast: ORANGE, tooFast: ROSE }
 
-type Item = { text: string; color?: string | undefined }
+type Item = { letter: string; value: string; color?: string | undefined }
 type View = { items: Item[]; isStale: boolean; title: string; rings: { pct: number; color: string }[] }
 
-export function view(r: Reading, now: number): View {
-  const p = r.wSpeed === null ? null : r.wSpeed * WORK_HOURS
-  const b = r.w ? budget(r.w, now) : null
-  const short = (n: number) => `${Math.round(n * 10) / 10}`
+export function view(r: Reading, s: RingSettings, now: number): View {
+  const p = r.wSpeed === null ? null : r.wSpeed * (s.unit === 'hour' ? 1 : s.workHours)
+  const b = r.w ? budget(r.w, s, now) : null
+  const per = s.unit === 'hour' ? '%/h' : '%/day'
+  const rate = (n: number) => `${Math.round(n * 10) / 10}${per}`
   const items: Item[] = []
   const titles: string[] = []
   const add = (letter: string, name: string, l: Limit | undefined, color: string | undefined) => {
     if (!l) return
-    items.push({ text: `${letter} ${l.pct}%`, color })
+    items.push({ letter, value: `${l.pct}%`, color })
     if (l.reset !== null && l.reset > now) titles.push(`${name} resets in ${timeLeft(l.reset - now)}`)
   }
   add('S', 'Session', r.s, r.s && PACE_COLOR[sessionPace(r.s, r.sSpeed, now)])
   add('W', 'Week', r.w, PACE_COLOR[overBudget(p, b)])
   add('F', 'Fable', r.f, undefined)
-  if (p !== null) items.push({ text: `P ${short(p)}%/day` })
-  if (b !== null) items.push({ text: `B ${b}%/day` })
+  if (r.w) items.push({ letter: 'P', value: p === null ? '…' : rate(p) })
+  if (p === null && r.w) titles.push('Pace shows after about ten minutes of readings')
+  if (b !== null) items.push({ letter: 'B', value: rate(b) })
 
   return {
     items,
