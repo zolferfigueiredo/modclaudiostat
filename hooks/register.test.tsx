@@ -18,10 +18,17 @@ const reply = (s: number, w: number) => ({
   ],
 })
 
-const HINT = {
+const BAND = {
   plugin: 'claudiostat-rings',
-  component: 'PromptHint',
-  props: { isDraft: false, isWorking: false, hint: '' },
+  component: 'AbovePrompt',
+  props: {
+    hasSurvey: false,
+    isWorking: false,
+    maxRows: 10,
+    bodyColumns: 80,
+    scroll: { offset: 0, bodyRows: 10 },
+    view: {},
+  },
 } as const
 
 test('the strip shows S, W, F, pace and budget from the account', async ($, on) => {
@@ -35,7 +42,7 @@ test('the strip shows S, W, F, pace and budget from the account', async ($, on) 
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   await clock.settle()
 
-  const ui = await $.ui.mount({ ...HINT, surface: 'desktop' })
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
   expect((await ui.find({ type: 'Text', text: /^S / }))?.props.color).toBe('#cd3e48')
   expect((await ui.find({ type: 'Text', text: /^W / }))?.text).toBe('W 19%')
   expect((await ui.find({ type: 'Text', text: /^F / }))?.text).toBe('F 10%')

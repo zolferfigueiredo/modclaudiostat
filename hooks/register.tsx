@@ -32,21 +32,19 @@ export const register: Register = on => {
     return started
   })
 
-  on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
+  // The desktop app draws a mod only in a pane or this band above the prompt, not in the hint line under it.
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const r = await read($, reading)
-    if (!r) return next(e)
+    if (!r || e.props.hasSurvey) return next(e)
     const v = view(r, await $.clock.now())
-
-    if (e.surface !== 'desktop') {
-      return next({ ...e, props: { ...e.props, tail: v.items.map(item => item.text).join(' · ') } })
-    }
-
-    const { Box, Text, Svg } = $.ui.resolve(e)
+    const ui = $.ui.resolve(e)
+    const { Box, Text } = ui
 
     return (
       <Box flexDirection="row" alignItems="center" gap="sm">
-        {e.props.hint !== '' && <Text dimColor>{e.props.hint}</Text>}
-        <Svg source={rings(v)} alt={v.items.map(item => item.text).join(', ')} width={18} height={18} isInteractive />
+        {'Svg' in ui && (
+          <ui.Svg source={rings(v)} alt={v.items.map(item => item.text).join(', ')} width={18} height={18} isInteractive />
+        )}
         {v.items.map(item => (
           <Text color={v.isStale ? undefined : item.color} dimColor={v.isStale || !item.color} tabular>
             {item.text}

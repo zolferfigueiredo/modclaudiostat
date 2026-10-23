@@ -1,6 +1,6 @@
 {
   "name": "claudiostat-rings",
   "version": "0.2.0",
-  "description": "ClaudioStat's session, week and Fable limits with pace and budget, in the hint line under the prompt",
+  "description": "ClaudioStat's session, week and Fable limits with pace and budget, in a thin row above the prompt",
   "types": "./types/index.d.ts"
 }
