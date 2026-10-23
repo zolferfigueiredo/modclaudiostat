@@ -64,8 +64,8 @@ export const register: Register = on => {
               </Box>
             ))}
           </Box>
-          <Button key="settings" plain onPress={() => update($, isSettingsOpen, open => !open)}>
-            <Text size="heading">⚙</Text>
+          <Button key="settings" label="Settings" onPress={() => update($, isSettingsOpen, open => !open)}>
+            <Text size="title">⚙</Text>
           </Button>
         </Box>
         {(await read($, isSettingsOpen)) && (
