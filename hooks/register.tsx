@@ -44,25 +44,29 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column" gap="xs">
-        <Box flexDirection="row" alignItems="center" gap="sm">
-          {'Svg' in ui && (
-            <ui.Svg
-              source={rings(v)}
-              alt={v.items.map(item => `${item.letter} ${item.value}`).join(', ')}
-              width={18}
-              height={18}
-              isInteractive
-            />
-          )}
-          {v.items.map(item => (
-            <Box flexDirection="row" gap="xs">
-              <Text dimColor>{item.letter}</Text>
-              <Text color={v.isStale ? undefined : item.color} dimColor={v.isStale} weight="semibold" tabular>
-                {item.value}
-              </Text>
-            </Box>
-          ))}
-          <Button key="settings" label="⚙" plain onPress={() => update($, isSettingsOpen, open => !open)} />
+        <Box flexDirection="row" alignItems="center" justifyContent="space-between" width="100%">
+          <Box flexDirection="row" alignItems="center" gap="sm">
+            {'Svg' in ui && (
+              <ui.Svg
+                source={rings(v)}
+                alt={v.items.map(item => `${item.letter} ${item.value}`).join(', ')}
+                width={18}
+                height={18}
+                isInteractive
+              />
+            )}
+            {v.items.map(item => (
+              <Box flexDirection="row" gap="xs">
+                <Text dimColor>{item.letter}</Text>
+                <Text color={v.isStale ? undefined : item.color} dimColor={v.isStale} weight="semibold" tabular>
+                  {item.value}
+                </Text>
+              </Box>
+            ))}
+          </Box>
+          <Button key="settings" plain onPress={() => update($, isSettingsOpen, open => !open)}>
+            <Text size="heading">⚙</Text>
+          </Button>
         </Box>
         {(await read($, isSettingsOpen)) && (
           <Box flexDirection="row" alignItems="center" gap="sm">
