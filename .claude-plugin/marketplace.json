@@ -1,0 +1,5 @@
+{
+  "name": "modclaudiostat",
+  "owner": { "name": "Zolfer Figueiredo" },
+  "plugins": [{ "name": "claudiostat-rings", "source": "./" }]
+}
