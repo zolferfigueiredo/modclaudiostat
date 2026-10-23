@@ -1,0 +1,5 @@
+#!/bin/sh
+if [ "$(git branch --show-current)" = "main" ]; then
+  echo "Commits to main are blocked: use a feature branch." >&2
+  exit 1
+fi
