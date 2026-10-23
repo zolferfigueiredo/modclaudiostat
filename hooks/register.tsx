@@ -67,6 +67,11 @@ export const register: Register = on => {
                 <Text color={v.isStale ? undefined : item.color} dimColor={v.isStale} weight="semibold" tabular>
                   {item.value}
                 </Text>
+                {item.reset && (
+                  <Text dimColor tabular>
+                    {item.reset}
+                  </Text>
+                )}
               </Box>
             ))}
           </Box>
@@ -212,7 +217,7 @@ const overBudget = (p: number | null, b: number | null): Pace =>
 
 const PACE_COLOR: Record<Pace, string | undefined> = { ok: undefined, fast: ORANGE, tooFast: ROSE }
 
-type Item = { letter: string; value: string; color?: string | undefined }
+type Item = { letter: string; value: string; color?: string | undefined; reset?: string }
 type Ring = { pct: number; color: string; hand: number | null }
 type View = { items: Item[]; isStale: boolean; title: string; rings: Ring[] }
 
@@ -223,14 +228,16 @@ export function view(r: Reading, s: RingSettings, now: number): View {
   const rate = (n: number) => `${Math.round(n * 10) / 10}${per}`
   const items: Item[] = []
   const titles: string[] = []
-  const add = (letter: string, name: string, l: Limit | undefined, color: string | undefined) => {
+  const add = (letter: string, name: string, l: Limit | undefined, color: string | undefined, showReset = true) => {
     if (!l) return
-    items.push({ letter, value: `${l.pct}%`, color })
-    if (l.reset !== null && l.reset > now) titles.push(`${name} resets in ${timeLeft(l.reset - now)}`)
+    const left = l.reset !== null && l.reset > now ? timeLeft(l.reset - now) : undefined
+    items.push({ letter, value: `${l.pct}%`, color, ...(showReset && left ? { reset: left } : {}) })
+    if (left) titles.push(`${name} resets in ${left}`)
   }
   add('S', 'Session', r.s, r.s && PACE_COLOR[sessionPace(r.s, r.sSpeed, now)])
   add('W', 'Week', r.w, PACE_COLOR[overBudget(p, b)])
-  add('F', 'Fable', r.f, undefined)
+  // Fable mostly resets with the week: its time only shows when it differs.
+  add('F', 'Fable', r.f, undefined, !(r.f && r.w && sameWindow(r.f, r.w)))
   if (r.w) items.push({ letter: 'P', value: p === null ? '…' : rate(p) })
   if (p === null && r.w) titles.push('Pace shows after about ten minutes of readings')
   if (b !== null) items.push({ letter: 'B', value: rate(b) })
@@ -252,7 +259,9 @@ export function timeLeft(ms: number): string {
   const days = Math.floor(minutes / 1440)
   const hours = Math.floor((minutes % 1440) / 60)
 
-  return days ? `${days}d ${hours}h` : hours ? `${hours}h ${minutes % 60}m` : `${minutes % 60}m`
+  const rest = (big: string, small: number, unit: string) => (small ? `${big} ${small}${unit}` : big)
+
+  return days ? rest(`${days}d`, hours, 'h') : hours ? rest(`${hours}h`, minutes % 60, 'm') : `${minutes % 60}m`
 }
 
 // Session outside, week inside, Fable innermost, each filled to its percentage; hovering shows the resets.
