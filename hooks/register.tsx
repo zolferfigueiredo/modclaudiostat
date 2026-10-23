@@ -33,6 +33,12 @@ export const register: Register = on => {
     return started
   })
 
+  on('ui.message', async ($, e, next) => {
+    if (e.element === 'gear') await update($, isSettingsOpen, open => !open)
+
+    return next(e)
+  })
+
   // The desktop app draws a mod only in a pane or this band above the prompt, not in the hint line under it.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const r = await read($, reading)
@@ -44,25 +50,32 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column" gap="xs">
-        <Box flexDirection="row" alignItems="center" gap="sm">
-          {'Svg' in ui && (
-            <ui.Svg
-              source={rings(v)}
-              alt={v.items.map(item => `${item.letter} ${item.value}`).join(', ')}
-              width={18}
-              height={18}
-              isInteractive
-            />
-          )}
-          {v.items.map(item => (
-            <Box flexDirection="row" gap="xs">
-              <Text dimColor>{item.letter}</Text>
-              <Text color={v.isStale ? undefined : item.color} dimColor={v.isStale} weight="semibold" tabular>
-                {item.value}
-              </Text>
-            </Box>
-          ))}
-          <Button key="settings" label="⚙" plain onPress={() => update($, isSettingsOpen, open => !open)} />
+        <Box flexDirection="row" alignItems="center" justifyContent="space-between" width="100%">
+          <Box flexDirection="row" alignItems="center" gap="sm">
+            {'Svg' in ui && (
+              <ui.Svg
+                source={rings(v)}
+                alt={v.items.map(item => `${item.letter} ${item.value}`).join(', ')}
+                width={18}
+                height={18}
+                isInteractive
+              />
+            )}
+            {v.items.map(item => (
+              <Box flexDirection="row" gap="xs">
+                <Text dimColor>{item.letter}</Text>
+                <Text color={v.isStale ? undefined : item.color} dimColor={v.isStale} weight="semibold" tabular>
+                  {item.value}
+                </Text>
+                {item.reset && (
+                  <Text dimColor tabular>
+                    {item.reset}
+                  </Text>
+                )}
+              </Box>
+            ))}
+          </Box>
+          {'Client' in ui && <ui.Client key="gear" module="./gear.tsx" />}
         </Box>
         {(await read($, isSettingsOpen)) && (
           <Box flexDirection="row" alignItems="center" gap="sm">
@@ -204,8 +217,9 @@ const overBudget = (p: number | null, b: number | null): Pace =>
 
 const PACE_COLOR: Record<Pace, string | undefined> = { ok: undefined, fast: ORANGE, tooFast: ROSE }
 
-type Item = { letter: string; value: string; color?: string | undefined }
-type View = { items: Item[]; isStale: boolean; title: string; rings: { pct: number; color: string }[] }
+type Item = { letter: string; value: string; color?: string | undefined; reset?: string }
+type Ring = { pct: number; color: string; hand: number | null }
+type View = { items: Item[]; isStale: boolean; title: string; rings: Ring[] }
 
 export function view(r: Reading, s: RingSettings, now: number): View {
   const p = r.wSpeed === null ? null : r.wSpeed * (s.unit === 'hour' ? 1 : s.workHours)
@@ -214,14 +228,16 @@ export function view(r: Reading, s: RingSettings, now: number): View {
   const rate = (n: number) => `${Math.round(n * 10) / 10}${per}`
   const items: Item[] = []
   const titles: string[] = []
-  const add = (letter: string, name: string, l: Limit | undefined, color: string | undefined) => {
+  const add = (letter: string, name: string, l: Limit | undefined, color: string | undefined, showReset = true) => {
     if (!l) return
-    items.push({ letter, value: `${l.pct}%`, color })
-    if (l.reset !== null && l.reset > now) titles.push(`${name} resets in ${timeLeft(l.reset - now)}`)
+    const left = l.reset !== null && l.reset > now ? timeLeft(l.reset - now) : undefined
+    items.push({ letter, value: `${l.pct}%`, color, ...(showReset && left ? { reset: left } : {}) })
+    if (left) titles.push(`${name} resets in ${left}`)
   }
   add('S', 'Session', r.s, r.s && PACE_COLOR[sessionPace(r.s, r.sSpeed, now)])
   add('W', 'Week', r.w, PACE_COLOR[overBudget(p, b)])
-  add('F', 'Fable', r.f, undefined)
+  // Fable mostly resets with the week: its time only shows when it differs.
+  add('F', 'Fable', r.f, undefined, !(r.f && r.w && sameWindow(r.f, r.w)))
   if (r.w) items.push({ letter: 'P', value: p === null ? '…' : rate(p) })
   if (p === null && r.w) titles.push('Pace shows after about ten minutes of readings')
   if (b !== null) items.push({ letter: 'B', value: rate(b) })
@@ -231,9 +247,9 @@ export function view(r: Reading, s: RingSettings, now: number): View {
     isStale: now - r.at > HOUR,
     title: titles.join('\n'),
     rings: [
-      ...(r.s ? [{ pct: r.s.pct, color: ORANGE }] : []),
-      ...(r.w ? [{ pct: r.w.pct, color: PEACH }] : []),
-      ...(r.f ? [{ pct: r.f.pct, color: STAR }] : []),
+      ...(r.s ? [{ pct: r.s.pct, color: ORANGE, hand: passed(r.s, 5 * HOUR, now) }] : []),
+      ...(r.w ? [{ pct: r.w.pct, color: PEACH, hand: passed(r.w, 7 * DAY, now) }] : []),
+      ...(r.f ? [{ pct: r.f.pct, color: STAR, hand: passed(r.f, 7 * DAY, now) }] : []),
     ],
   }
 }
@@ -243,20 +259,29 @@ export function timeLeft(ms: number): string {
   const days = Math.floor(minutes / 1440)
   const hours = Math.floor((minutes % 1440) / 60)
 
-  return days ? `${days}d ${hours}h` : hours ? `${hours}h ${minutes % 60}m` : `${minutes % 60}m`
+  const rest = (big: string, small: number, unit: string) => (small ? `${big} ${small}${unit}` : big)
+
+  return days ? rest(`${days}d`, hours, 'h') : hours ? rest(`${hours}h`, minutes % 60, 'm') : `${minutes % 60}m`
 }
 
 // Session outside, week inside, Fable innermost, each filled to its percentage; hovering shows the resets.
+/** How much of the limit's window has passed, for its hand; null without a future reset. */
+const passed = (l: Limit, window: number, now: number) =>
+  l.reset === null || l.reset <= now ? null : Math.min(1, Math.max(0, 1 - (l.reset - now) / window))
+
+// A ring ahead of its hand is faster than an even spread, as on the ClaudioStat widgets.
 function rings(v: View): string {
   const width = 11
   const arcs = v.rings.map((ring, index) => {
-    const r = 44.5 - index * 15
+    const r = 42 - index * 14
     const fill = Math.min(100, Math.max(0, ring.pct))
     const arc = fill > 0
       ? `<circle cx="50" cy="50" r="${r}" fill="none" stroke="${ring.color}" stroke-width="${width}" stroke-linecap="round" pathLength="100" stroke-dasharray="${fill} 100" transform="rotate(-90 50 50)"/>`
       : ''
 
-    return `<circle class="st" cx="50" cy="50" r="${r}" fill="none" stroke-width="${width}" stroke-opacity=".18"/>${arc}`
+    const hand = ring.hand === null ? '' : handLine(ring.hand, r - width / 2 - 2, r + width / 2 + 2)
+
+    return `<circle class="st" cx="50" cy="50" r="${r}" fill="none" stroke-width="${width}" stroke-opacity=".18"/>${arc}${hand}`
   })
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
@@ -264,4 +289,12 @@ function rings(v: View): string {
 <style>.st{stroke:#1f0d0b}@media (prefers-color-scheme:dark){.st{stroke:#fff4e6}}</style>
 ${arcs.join('')}
 </svg>`
+}
+
+function handLine(share: number, inner: number, outer: number): string {
+  const radians = ((share * 360 - 90) * Math.PI) / 180
+  const x = (r: number) => (50 + r * Math.cos(radians)).toFixed(2)
+  const y = (r: number) => (50 + r * Math.sin(radians)).toFixed(2)
+
+  return `<line class="st" x1="${x(inner)}" y1="${y(inner)}" x2="${x(outer)}" y2="${y(outer)}" stroke-width="6" stroke-linecap="round"/>`
 }

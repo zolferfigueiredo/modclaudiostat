@@ -50,8 +50,12 @@ test('the strip shows S, W, F, pace and budget from the account', async ($, on) 
   // Per working hour by default: W rose 10 points in an hour, against 81% left over 26 working hours.
   expect(await value(/^10%\/h$/)).toBeDefined()
   expect(await value(/^3\.1%\/h$/)).toBeDefined()
+  // Session resets in 2 h, week in 3 d 6 h; Fable shares the week's reset, so its time is left out.
+  expect(await value(/^2h$/)).toBeDefined()
+  expect(await value(/^3d 6h$/)).toBeDefined()
 
-  await ui.press({ key: 'settings' })
+  expect((await ui.find({ type: 'Text', in: 'gear' }))?.props.size).toBe('title')
+  await ui.pointer({ type: 'down', x: 0, y: 0, button: 'left', in: 'gear' })
   await ui.press({ key: 'day' })
   // Per day: 80%/day over 8 working hours, against 81% left over 4 days.
   expect(await value(/^80%\/day$/)).toBeDefined()
