@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-import { budget, snapshot, speed, timeLeft } from './register'
+import { budget, snapshot, speed, timeLeft, view } from './register'
 
 const NOW = Date.parse('2026-10-24T12:00:00Z')
 const HOUR = 3_600_000
@@ -65,4 +65,23 @@ test('the strip shows S, W, F, pace and budget from the account', async ($, on) 
   expect(budget({ pct: 100, reset: NOW + HOUR }, { unit: 'hour', workHours: 8 }, NOW)).toBe(0)
   expect(speed([], 'w', 7 * 24 * HOUR, HOUR)).toBe(null)
   expect(timeLeft(45 * 60_000)).toBe('45m')
+})
+
+test('F and its ring show only from 1%', async () => {
+  const letters = (pct: number) => {
+    const v = view({ at: NOW, f: { pct, reset: null }, sSpeed: null, wSpeed: null }, { unit: 'hour', workHours: 8 }, NOW)
+
+    return [v.items.map(item => item.letter).join(''), v.rings.length]
+  }
+  expect(letters(0)).toEqual(['', 0])
+  expect(letters(1)).toEqual(['F', 1])
+})
+
+test('P reads 0 until there is a pace to show', async () => {
+  const pace = (unit: 'hour' | 'day') =>
+    view({ at: NOW, w: { pct: 0, reset: null }, sSpeed: null, wSpeed: null }, { unit, workHours: 8 }, NOW).items.find(
+      item => item.letter === 'P',
+    )?.value
+  expect(pace('hour')).toBe('0%/h')
+  expect(pace('day')).toBe('0%/day')
 })

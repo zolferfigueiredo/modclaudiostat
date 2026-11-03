@@ -226,6 +226,7 @@ export function view(r: Reading, s: RingSettings, now: number): View {
   const b = r.w ? budget(r.w, s, now) : null
   const per = s.unit === 'hour' ? '%/h' : '%/day'
   const rate = (n: number) => `${Math.round(n * 10) / 10}${per}`
+  const f = r.f && r.f.pct >= 1 ? r.f : undefined
   const items: Item[] = []
   const titles: string[] = []
   const add = (letter: string, name: string, l: Limit | undefined, color: string | undefined, showReset = true) => {
@@ -237,8 +238,8 @@ export function view(r: Reading, s: RingSettings, now: number): View {
   add('S', 'Session', r.s, r.s && PACE_COLOR[sessionPace(r.s, r.sSpeed, now)])
   add('W', 'Week', r.w, PACE_COLOR[overBudget(p, b)])
   // Fable mostly resets with the week: its time only shows when it differs.
-  add('F', 'Fable', r.f, undefined, !(r.f && r.w && sameWindow(r.f, r.w)))
-  if (r.w) items.push({ letter: 'P', value: p === null ? '…' : rate(p) })
+  add('F', 'Fable', f, undefined, !(f && r.w && sameWindow(f, r.w)))
+  if (r.w) items.push({ letter: 'P', value: rate(p ?? 0) })
   if (p === null && r.w) titles.push('Pace shows after about ten minutes of readings')
   if (b !== null) items.push({ letter: 'B', value: rate(b) })
 
@@ -249,7 +250,7 @@ export function view(r: Reading, s: RingSettings, now: number): View {
     rings: [
       ...(r.s ? [{ pct: r.s.pct, color: ORANGE, hand: passed(r.s, 5 * HOUR, now) }] : []),
       ...(r.w ? [{ pct: r.w.pct, color: PEACH, hand: passed(r.w, 7 * DAY, now) }] : []),
-      ...(r.f ? [{ pct: r.f.pct, color: STAR, hand: passed(r.f, 7 * DAY, now) }] : []),
+      ...(f ? [{ pct: f.pct, color: STAR, hand: passed(f, 7 * DAY, now) }] : []),
     ],
   }
 }
