@@ -1,0 +1,41 @@
+name: Bug report
+description: Something doesn't work as it should
+labels: [bug]
+body:
+  - type: textarea
+    attributes:
+      label: What happened?
+      description: What you expected, what you got instead, and a screenshot of the row if it helps.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start a new session
+        2. Click the ⚙
+        3. ...
+  - type: dropdown
+    attributes:
+      label: Where do you run it?
+      options:
+        - Code tab of the Claude desktop app
+        - Claude Code in a terminal
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Mod version
+      description: Run `claude plugin list` and look for claudiostat-rings.
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Claude Code version
+      description: Run `claude --version`.
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Operating system
+      placeholder: macOS 26.1, Windows 11, Ubuntu 24.04 ...
