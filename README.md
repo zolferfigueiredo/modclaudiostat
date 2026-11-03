@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo.png" width="128" height="128" alt="Zolfer's pixel-art logo">
+  <img src="docs/icon.png" width="128" height="128" alt="ClaudioStat icon">
 </p>
 
 <h1 align="center">modclaudiostat</h1>
