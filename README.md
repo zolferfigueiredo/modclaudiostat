@@ -39,6 +39,14 @@ Answer `y` to add the marketplace, then pick a scope (**user** puts it in every 
 claude plugin install claudiostat-rings --marketplace zolferfigueiredo/modclaudiostat
 ```
 
+If it says the plugin isn't found, your Claude Code may be too old for `--marketplace`. Run `claude update`, or
+add the marketplace first and install from it, which works on any version:
+
+```bash
+claude plugin marketplace add zolferfigueiredo/modclaudiostat
+claude plugin install claudiostat-rings@modclaudiostat
+```
+
 In the Claude desktop app, click **+** next to the prompt box, then **Plugins**, **Add marketplace** with
 `zolferfigueiredo/modclaudiostat`, then **Add plugin**.
 
