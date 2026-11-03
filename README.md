@@ -14,6 +14,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" alt="TypeScript 5">
   <img src="https://img.shields.io/badge/Claude_Code-mod-D97757" alt="A Claude Code mod">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow" alt="MIT license"></a>
 </p>
 
 <p align="center">
@@ -137,6 +138,10 @@ claude plugin uninstall claudiostat-rings@modclaudiostat
 
 Unofficial. Not affiliated with or endorsed by Anthropic. It reads a usage endpoint Anthropic doesn't document,
 which may change or stop working at any time.
+
+## License
+
+[MIT](LICENSE)
 
 ## Credits
 
