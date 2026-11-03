@@ -45,7 +45,8 @@ test('the strip shows S, W, F, pace and budget from the account', async ($, on) 
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
   const value = async (text: RegExp) => ui.find({ type: 'Text', text })
   expect((await value(/^60%$/))?.props.color).toBe('#cd3e48')
-  expect((await value(/^19%$/))?.props.color).toBe('#cd3e48')
+  // W's pace is high, but 19% is far behind the 54% of the week gone, so it stays uncolored.
+  expect((await value(/^19%$/))?.props.color).toBeUndefined()
   expect(await value(/^10%$/)).toBeDefined()
   // Per working hour by default: W rose 10 points in an hour, against 81% left over 26 working hours.
   expect(await value(/^10%\/h$/)).toBeDefined()
@@ -84,4 +85,16 @@ test('P reads 0 until there is a pace to show', async () => {
     )?.value
   expect(pace('hour')).toBe('0%/h')
   expect(pace('day')).toBe('0%/day')
+})
+
+test('W turns orange near its time mark and red past it', async () => {
+  // Half the week gone: the mark is at 50%. A high pace alone doesn't color it.
+  const color = (pct: number) =>
+    view({ at: NOW, w: { pct, reset: NOW + 3.5 * 24 * HOUR }, sSpeed: null, wSpeed: 50 }, { unit: 'hour', workHours: 8 }, NOW)
+      .items.find(item => item.letter === 'W')?.color
+  expect(color(0)).toBeUndefined()
+  expect(color(44)).toBeUndefined()
+  expect(color(45)).toBe('#ee7048')
+  expect(color(50)).toBe('#ee7048')
+  expect(color(51)).toBe('#cd3e48')
 })
