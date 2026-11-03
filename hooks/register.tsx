@@ -212,6 +212,7 @@ export function view(r: Reading, s: RingSettings, now: number): View {
   const b = r.w ? budget(r.w, s, now) : null
   const per = s.unit === 'hour' ? '%/h' : '%/day'
   const rate = (n: number) => `${Math.round(n * 10) / 10}${per}`
+  const f = r.f && r.f.pct >= 1 ? r.f : undefined
   const items: Item[] = []
   const titles: string[] = []
   const add = (letter: string, name: string, l: Limit | undefined, color: string | undefined) => {
@@ -221,8 +222,8 @@ export function view(r: Reading, s: RingSettings, now: number): View {
   }
   add('S', 'Session', r.s, r.s && PACE_COLOR[sessionPace(r.s, r.sSpeed, now)])
   add('W', 'Week', r.w, PACE_COLOR[overBudget(p, b)])
-  add('F', 'Fable', r.f, undefined)
-  if (r.w) items.push({ letter: 'P', value: p === null ? '…' : rate(p) })
+  add('F', 'Fable', f, undefined)
+  if (r.w) items.push({ letter: 'P', value: rate(p ?? 0) })
   if (p === null && r.w) titles.push('Pace shows after about ten minutes of readings')
   if (b !== null) items.push({ letter: 'B', value: rate(b) })
 
@@ -233,7 +234,7 @@ export function view(r: Reading, s: RingSettings, now: number): View {
     rings: [
       ...(r.s ? [{ pct: r.s.pct, color: ORANGE }] : []),
       ...(r.w ? [{ pct: r.w.pct, color: PEACH }] : []),
-      ...(r.f ? [{ pct: r.f.pct, color: STAR }] : []),
+      ...(f ? [{ pct: f.pct, color: STAR }] : []),
     ],
   }
 }
