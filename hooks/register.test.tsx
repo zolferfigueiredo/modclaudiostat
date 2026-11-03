@@ -87,14 +87,17 @@ test('P reads 0 until there is a pace to show', async () => {
   expect(pace('day')).toBe('0%/day')
 })
 
-test('W turns orange near its time mark and red past it', async () => {
-  // Half the week gone: the mark is at 50%. A high pace alone doesn't color it.
-  const color = (pct: number) =>
-    view({ at: NOW, w: { pct, reset: NOW + 3.5 * 24 * HOUR }, sSpeed: null, wSpeed: 50 }, { unit: 'hour', workHours: 8 }, NOW)
+test('W turns orange near its time mark and red past it while outrunning it', async () => {
+  // Half the week gone: the mark is at 50% and moves about 0.6 points an hour. A high pace alone doesn't color W.
+  const color = (pct: number, wSpeed: number | null = 50) =>
+    view({ at: NOW, w: { pct, reset: NOW + 3.5 * 24 * HOUR }, sSpeed: null, wSpeed }, { unit: 'hour', workHours: 8 }, NOW)
       .items.find(item => item.letter === 'W')?.color
   expect(color(0)).toBeUndefined()
   expect(color(44)).toBeUndefined()
   expect(color(45)).toBe('#ee7048')
   expect(color(50)).toBe('#ee7048')
   expect(color(51)).toBe('#cd3e48')
+  // Past the mark but slower than it, or with no pace yet: the mark is catching up, so orange.
+  expect(color(51, 0.5)).toBe('#ee7048')
+  expect(color(51, null)).toBe('#ee7048')
 })

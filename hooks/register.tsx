@@ -211,13 +211,17 @@ function sessionPace(s: Limit, sSpeed: number | null, now: number): Pace {
   return sSpeed > needed + 5 ? 'tooFast' : sSpeed > needed ? 'fast' : 'ok'
 }
 
-/** W against its ring's hand, the share of the week gone: orange within 5 points of it, red once past it. */
-function weekPace(w: Limit, now: number): Pace {
+/**
+ * W against its ring's hand, the share of the week gone: orange within 5 points of it or past it, red once past it
+ * and still rising faster than the hand moves.
+ */
+function weekPace(w: Limit, wSpeed: number | null, now: number): Pace {
   const hand = passed(w, 7 * DAY, now)
   if (hand === null || w.pct === 0) return 'ok'
   const mark = hand * 100
+  const isFaster = wSpeed !== null && wSpeed > (100 * HOUR) / (7 * DAY)
 
-  return w.pct > mark ? 'tooFast' : w.pct >= mark - 5 ? 'fast' : 'ok'
+  return w.pct > mark && isFaster ? 'tooFast' : w.pct >= mark - 5 ? 'fast' : 'ok'
 }
 
 const PACE_COLOR: Record<Pace, string | undefined> = { ok: undefined, fast: ORANGE, tooFast: ROSE }
@@ -241,7 +245,7 @@ export function view(r: Reading, s: RingSettings, now: number): View {
     if (left) titles.push(`${name} resets in ${left}`)
   }
   add('S', 'Session', r.s, r.s && PACE_COLOR[sessionPace(r.s, r.sSpeed, now)])
-  add('W', 'Week', r.w, r.w && PACE_COLOR[weekPace(r.w, now)])
+  add('W', 'Week', r.w, r.w && PACE_COLOR[weekPace(r.w, r.wSpeed, now)])
   // Fable mostly resets with the week: its time only shows when it differs.
   add('F', 'Fable', f, undefined, !(f && r.w && sameWindow(f, r.w)))
   if (r.w) items.push({ letter: 'P', value: rate(p ?? 0) })
