@@ -33,7 +33,7 @@ const BAND = {
 
 test('the strip shows S, W, F, pace and budget from the account', async ($, on) => {
   const clock = mock.clock(on, { now: NOW })
-  // An hour ago W was 10 points lower and S 40 lower: both well past what lasts until their resets.
+  // An hour ago W was 10 points lower and S 40 lower.
   mock.store(on, { samples: [snapshot(reply(20, 9), NOW - HOUR)] })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('session.authorize', () => ({ value: { handle: 'h', kind: 'bearer' } }))
@@ -44,8 +44,10 @@ test('the strip shows S, W, F, pace and budget from the account', async ($, on) 
 
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
   const value = async (text: RegExp) => ui.find({ type: 'Text', text })
-  expect((await value(/^60%$/))?.props.color).toBe('#cd3e48')
-  expect((await value(/^19%$/))?.props.color).toBe('#cd3e48')
+  // S's 60% sits right on the 60% of its window gone: orange, not yet past it.
+  expect((await value(/^60%$/))?.props.color).toBe('#ee7048')
+  // W's pace is high, but 19% is far behind the 54% of the week gone, so it stays uncolored.
+  expect((await value(/^19%$/))?.props.color).toBeUndefined()
   expect(await value(/^10%$/)).toBeDefined()
   // Per working hour by default: W rose 10 points in an hour, against 81% left over 26 working hours.
   expect(await value(/^10%\/h$/)).toBeDefined()
@@ -84,4 +86,26 @@ test('P reads 0 until there is a pace to show', async () => {
     )?.value
   expect(pace('hour')).toBe('0%/h')
   expect(pace('day')).toBe('0%/day')
+})
+
+test('S and W turn orange near their time mark and red past it while outrunning it', async () => {
+  // Half of each window gone: both marks are at 50%. S's moves 20 points an hour, W's about 0.6.
+  const color = (letter: 'S' | 'W', pct: number, speed: number | null) => {
+    const s = { pct, reset: NOW + 2.5 * HOUR }
+    const w = { pct, reset: NOW + 3.5 * 24 * HOUR }
+    const r = letter === 'S' ? { s, sSpeed: speed, wSpeed: null } : { w, sSpeed: null, wSpeed: speed }
+
+    return view({ at: NOW, ...r }, { unit: 'hour', workHours: 8 }, NOW).items.find(item => item.letter === letter)?.color
+  }
+  for (const [letter, fast, slow] of [['S', 30, 10], ['W', 50, 0.5]] as const) {
+    // A high pace alone doesn't color it.
+    expect(color(letter, 0, fast)).toBeUndefined()
+    expect(color(letter, 44, fast)).toBeUndefined()
+    expect(color(letter, 45, fast)).toBe('#ee7048')
+    expect(color(letter, 50, fast)).toBe('#ee7048')
+    expect(color(letter, 51, fast)).toBe('#cd3e48')
+    // Past the mark but slower than it, or with no pace yet: the mark is catching up, so orange.
+    expect(color(letter, 51, slow)).toBe('#ee7048')
+    expect(color(letter, 51, null)).toBe('#ee7048')
+  }
 })

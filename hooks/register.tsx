@@ -203,17 +203,18 @@ export function budget(week: Limit, s: RingSettings, now: number): number | null
   return Math.floor((remaining * steps) / units) / steps
 }
 
-/** S against an even spread of what's left until its reset: orange once faster, red 5 points per hour past it. */
-function sessionPace(s: Limit, sSpeed: number | null, now: number): Pace {
-  if (sSpeed === null || s.reset === null || s.reset <= now) return 'ok'
-  const needed = (Math.max(0, 100 - s.pct) * HOUR) / (s.reset - now)
+/**
+ * A limit against its ring's hand, the share of its window gone: orange within 5 points of it or past it, red once
+ * past it and still rising faster than the hand moves.
+ */
+function markPace(l: Limit, speed: number | null, length: number, now: number): Pace {
+  const hand = passed(l, length, now)
+  if (hand === null || l.pct === 0) return 'ok'
+  const mark = hand * 100
+  const isFaster = speed !== null && speed > (100 * HOUR) / length
 
-  return sSpeed > needed + 5 ? 'tooFast' : sSpeed > needed ? 'fast' : 'ok'
+  return l.pct > mark && isFaster ? 'tooFast' : l.pct >= mark - 5 ? 'fast' : 'ok'
 }
-
-/** P against B: orange past the budget, red from twice it. */
-const overBudget = (p: number | null, b: number | null): Pace =>
-  p === null || b === null ? 'ok' : p > 0 && p >= 2 * b ? 'tooFast' : p > b ? 'fast' : 'ok'
 
 const PACE_COLOR: Record<Pace, string | undefined> = { ok: undefined, fast: ORANGE, tooFast: ROSE }
 
@@ -235,8 +236,8 @@ export function view(r: Reading, s: RingSettings, now: number): View {
     items.push({ letter, value: `${l.pct}%`, color, ...(showReset && left ? { reset: left } : {}) })
     if (left) titles.push(`${name} resets in ${left}`)
   }
-  add('S', 'Session', r.s, r.s && PACE_COLOR[sessionPace(r.s, r.sSpeed, now)])
-  add('W', 'Week', r.w, PACE_COLOR[overBudget(p, b)])
+  add('S', 'Session', r.s, r.s && PACE_COLOR[markPace(r.s, r.sSpeed, 5 * HOUR, now)])
+  add('W', 'Week', r.w, r.w && PACE_COLOR[markPace(r.w, r.wSpeed, 7 * DAY, now)])
   // Fable mostly resets with the week: its time only shows when it differs.
   add('F', 'Fable', f, undefined, !(f && r.w && sameWindow(f, r.w)))
   if (r.w) items.push({ letter: 'P', value: rate(p ?? 0) })
